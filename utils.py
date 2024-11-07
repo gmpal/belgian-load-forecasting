@@ -21,9 +21,6 @@ def preprocess(filepath, lockdown=[(182692, 187181), (204772, 219268)]):
     data['Total Load Interpolated'] = data['Total Load'].interpolate(method='linear')
     return data
 
-import pandas as pd
-import numpy as np
-
 def create_time_series_splits(data, 
                               train_size_days, 
                               test_size_days, 
@@ -50,10 +47,14 @@ def create_time_series_splits(data,
     - prediction_horizon_steps (int): Number of 15-minute steps ahead to predict (prediction horizon).
     - shifting_steps (int or None): Number of 15-minute steps to skip between samples.
                                     If None, defaults to 1 (no skipping).
+    - elia_column_to_return (str or None): An additional column to return with the same format as Y (target column).
+                                        Useful to compare the results of the model with the ELIA forecasting. 
+                                        It can be for example 'Most recent forecast' or  'Day-ahead 6PM forecast'
 
     Returns:
     - splits (list): A list containing dictionaries with keys 'X_train', 'Y_train', 'X_test', 'Y_test' for each split.
-                     Each DataFrame has its index set to the datetime right before prediction.
+                     Each DataFrame has its index set to the datetime right before prediction. 
+                     If elia_column_to_return is not None, the dictionary will also contain 'ELIA_train' and 'ELIA_test'.
     """
 
     steps_per_day = 96  # Number of 15-minute intervals in a day
