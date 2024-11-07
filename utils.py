@@ -30,7 +30,8 @@ def create_time_series_splits(data,
                               target_column, 
                               prediction_horizon_steps, 
                               shifting_steps=None,
-                              elia_column_to_return=None):
+                              elia_column_to_return=None,
+                              alignment_times=None):
     """
     Creates train/test splits for a multivariate time series dataset with maintained column names
     and datetime indices corresponding to the prediction time.
@@ -50,6 +51,7 @@ def create_time_series_splits(data,
     - elia_column_to_return (str or None): An additional column to return with the same format as Y (target column).
                                         Useful to compare the results of the model with the ELIA forecasting. 
                                         It can be for example 'Most recent forecast' or  'Day-ahead 6PM forecast'
+    - alignment_times (list or None): A list of times to align the samples to. Should run with shifting_steps = 1, it will select a subset of timestep that aligns with the specified times. (To start testing set at 6pm for example)
 
     Returns:
     - splits (list): A list containing dictionaries with keys 'X_train', 'Y_train', 'X_test', 'Y_test' for each split.
@@ -88,10 +90,10 @@ def create_time_series_splits(data,
         test_data = data.iloc[test_start : test_end + window_size_steps + prediction_horizon_steps]
 
         # Generate training samples
-        sample_train = create_samples_with_datetime_index(train_data, window_size_steps, exclude_columns, target_column, prediction_horizon_steps, shifting_steps, elia_column_to_return)
+        sample_train = create_samples_with_datetime_index(train_data, window_size_steps, exclude_columns, target_column, prediction_horizon_steps, shifting_steps, elia_column_to_return,alignment_times=None) # training set does not require alignment
 
         # Generate testing samples
-        sample_test = create_samples_with_datetime_index(test_data, window_size_steps, exclude_columns, target_column, prediction_horizon_steps, shifting_steps, elia_column_to_return)
+        sample_test = create_samples_with_datetime_index(test_data, window_size_steps, exclude_columns, target_column, prediction_horizon_steps, shifting_steps, elia_column_to_return,alignment_times)
 
         if elia_column_to_return:
             X_train, Y_train, ELIA_train = sample_train
@@ -119,7 +121,7 @@ def create_time_series_splits(data,
 
     return splits
 
-def create_samples_with_datetime_index(data, window_size_steps, exclude_columns, target_column, prediction_horizon_steps, shifting_steps, elia_column_to_return):
+def create_samples_with_datetime_index(data, window_size_steps, exclude_columns, target_column, prediction_horizon_steps, shifting_steps, elia_column_to_return,alignment_times):
     """
     Generates samples for X and Y based on the window size and prediction horizon,
     maintaining column names with time step suffixes and setting the index to datetime.
@@ -142,6 +144,11 @@ def create_samples_with_datetime_index(data, window_size_steps, exclude_columns,
     if not isinstance(data.index, pd.DatetimeIndex):
         raise ValueError("Data must have a DateTimeIndex.")
 
+    # Convert alignment_times to a set of datetime.time objects
+    if alignment_times is not None:
+        alignment_times = {pd.to_datetime(t).time() if isinstance(t, str) else t for t in alignment_times}
+
+
     # Determine feature columns by excluding specified columns and the target column
     feature_columns = [col for col in data.columns if col not in exclude_columns]
 
@@ -161,6 +168,12 @@ def create_samples_with_datetime_index(data, window_size_steps, exclude_columns,
 
     for t in t_values:
         # Initialize an empty dictionary to store the features for this sample
+        timestamp_t = data.index[t]
+        # If alignment_times is specified, check if the time of timestamp_t matches
+        if alignment_times is not None and timestamp_t.time() not in alignment_times:
+            continue  # Skip this time step if it doesn't match the alignment times
+
+
         X_t = {}
         
         # Iterate over the time window
