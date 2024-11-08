@@ -314,3 +314,90 @@ def create_samples_with_datetime_index(data, window_size_steps, exclude_columns,
         return X, Y, ELIA
     else:
         return X, Y
+    
+
+def construct_iterative_forecast(X_test, trained_model, starting_time = '18:00', number_of_steps = 30, window_size_steps=4, target_column = 'Total Load Interpolated', granularity_minutes = 15, verbose=False): 
+    """
+    Generates forecasts iteratively for a specified number of steps ahead, updating the test data with past predictions at each step.
+
+    This function simulates real-time forecasting by updating the test dataset (`X_test`) with predictions from the previous steps,
+    mimicking a scenario where future inputs are partially dependent on past outputs. It is particularly useful for time series forecasting
+    tasks where predictions are sequentially dependent.
+
+    Parameters:
+    -----------
+    X_test : pandas DataFrame
+        The test dataset containing the features for forecasting. Must have a datetime-like index.
+    trained_model : model object
+        The pre-trained model capable of making predictions. This model must have a `predict` method.
+    starting_time : str, optional
+        The starting time as a string in 'HH:MM' format, from which the forecasting will begin. Default is '18:00'.
+    number_of_steps : int, optional
+        The total number of forecasting steps to perform. Default is 30.
+    window_size_steps : int, optional
+        The number of past steps to use for updating the test dataset at each forecasting step. Default is 4.
+    target_column : str, optional
+        The name of the target variable column in `X_test` that needs to be forecasted and updated. Default is 'Total Load Interpolated'.
+    granularity_minutes : int, optional
+        The time interval in minutes between each forecasting step. Default is 15 minutes.
+    verbose : bool, optional
+        If set to True, prints detailed debug information at each step of the forecasting process. Default is False.
+
+    Returns:
+    --------
+    predictions : pandas DataFrame
+        A DataFrame containing the predictions for each forecasting step, indexed similarly to the input `X_test`.
+
+    Examples:
+    ---------
+    >>> preds = construct_iterative_forecast(X_test, trained_model, starting_time='18:00', number_of_steps=96, window_size_steps=4, target_column='Total Load Interpolated', granularity_minutes=15, verbose=True)
+    >>> print(preds.head())
+    """
+
+    predictions = pd.DataFrame(dtype='float64')
+    for forecasting_step in range(number_of_steps):
+        if verbose: 
+            print(f'Forecasting step {forecasting_step}')
+        
+        current_t = pd.to_datetime(starting_time) + pd.Timedelta(minutes=granularity_minutes * (forecasting_step)) # one step before forecasting time
+        if verbose:
+            print(f'Current time: {current_t}')
+        
+        X_test_current = X_test.loc[X_test.index.time == current_t.time()]
+
+        if forecasting_step <= window_size_steps:
+            to_update = forecasting_step
+        else:
+            to_update = window_size_steps
+
+        if verbose:
+            print(f'Updating {to_update} columns')
+
+        # only some columns need to be updated 
+        for i in range(to_update):
+            previous_time = pd.to_datetime(current_t) - pd.Timedelta(minutes=granularity_minutes * (i + 1))
+            if verbose:
+                print(f'Updating column {target_column}_t-{i} with past predictions at time {previous_time}')
+            past_predictions = predictions.loc[predictions.index.time == previous_time.time()]
+            if verbose:
+                print('Past predictions')
+                print(past_predictions.head())
+            X_test_current.loc[:,f'{target_column}_t-{i}'] = past_predictions.values.flatten().astype('float64')
+
+        if verbose:
+            print('Updated X_test_current')
+            print(X_test_current.head())
+
+        Y_pred_current = pd.DataFrame(trained_model.predict(X_test_current), index=X_test_current.index, columns=[target_column], dtype='float64')
+        
+        if verbose: 
+            print("Predictions")
+            print(Y_pred_current.head())
+
+        predictions = pd.concat([predictions, Y_pred_current])
+
+        if verbose:
+            print('\n\n')
+
+
+    return predictions
