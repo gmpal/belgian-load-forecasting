@@ -21,17 +21,56 @@ def preprocess(filepath, lockdown=[(182692, 187181), (204772, 219268)]):
     data['Total Load Interpolated'] = data['Total Load'].interpolate(method='linear')
     return data
 
-def create_time_series_splits(data, 
-                              train_size_days, 
-                              test_size_days, 
-                              num_splits, 
-                              window_size_steps, 
-                              exclude_columns, 
-                              target_column, 
-                              prediction_horizon_steps, 
-                              shifting_steps=None,
-                              elia_column_to_return=None,
-                              alignment_times=None):
+from multiprocessing import Pool
+
+def process_split(args):
+    (split_index, data, train_size_steps, test_size_steps, window_size_steps, exclude_columns,
+     target_column, prediction_horizon_steps, shifting_steps, elia_column_to_return, alignment_times) = args
+
+    split_size_steps = train_size_steps + test_size_steps
+
+    # Calculate indices for train and test data
+    split_start = split_index * split_size_steps
+    train_start = split_start
+    train_end = train_start + train_size_steps - 1
+
+    test_start = train_end + 1
+    test_end = test_start + test_size_steps - 1
+
+    # Extract train and test data for the current split
+    train_data = data.iloc[train_start : train_end + window_size_steps + prediction_horizon_steps]
+    test_data = data.iloc[test_start : test_end + window_size_steps + prediction_horizon_steps]
+
+    # Generate training samples
+    sample_train = create_samples_with_datetime_index(
+        train_data, window_size_steps, exclude_columns, target_column,
+        prediction_horizon_steps, shifting_steps, elia_column_to_return, alignment_times=None
+    )
+
+    # Generate testing samples
+    sample_test = create_samples_with_datetime_index(
+        test_data, window_size_steps, exclude_columns, target_column,
+        prediction_horizon_steps, shifting_steps, elia_column_to_return, alignment_times
+    )
+
+    if elia_column_to_return:
+        X_train, Y_train, ELIA_train = sample_train
+        X_test, Y_test, ELIA_test = sample_test
+        return {
+            'X_train': X_train, 'Y_train': Y_train, 'X_test': X_test,
+            'Y_test': Y_test, 'ELIA_train': ELIA_train, 'ELIA_test': ELIA_test
+        }
+    else:
+        X_train, Y_train = sample_train
+        X_test, Y_test = sample_test
+        return {
+            'X_train': X_train, 'Y_train': Y_train, 'X_test': X_test, 'Y_test': Y_test
+        }
+
+def create_time_series_splits(data, train_size_days, test_size_days, num_splits,
+                              window_size_steps, exclude_columns, target_column,
+                              prediction_horizon_steps, shifting_steps=None,
+                              elia_column_to_return=None, alignment_times=None, n_jobs=1):
     """
     Creates train/test splits for a multivariate time series dataset with maintained column names
     and datetime indices corresponding to the prediction time.
@@ -69,57 +108,126 @@ def create_time_series_splits(data,
     split_size_steps = train_size_steps + test_size_steps
 
     # Calculate the total number of data points required
-    total_data_steps_needed = split_size_steps * num_splits + window_size_steps + prediction_horizon_steps - 1
+    total_data_steps_needed = (split_size_steps * num_splits +
+                               window_size_steps + prediction_horizon_steps - 1)
 
     if len(data) < total_data_steps_needed:
         raise ValueError('Not enough data for the specified number of splits and sizes.')
 
-    splits = []
+    # Prepare arguments for each split
+    args_list = [
+        (split_index, data, train_size_steps, test_size_steps, window_size_steps,
+         exclude_columns, target_column, prediction_horizon_steps, shifting_steps,
+         elia_column_to_return, alignment_times)
+        for split_index in range(num_splits)
+    ]
 
-    for split_index in range(num_splits):
-        # Calculate indices for train and test data
-        split_start = split_index * split_size_steps
-        train_start = split_start
-        train_end = train_start + train_size_steps - 1
-
-        test_start = train_end + 1
-        test_end = test_start + test_size_steps - 1
-
-        # Extract train and test data for the current split
-        train_data = data.iloc[train_start : train_end + window_size_steps + prediction_horizon_steps]
-        test_data = data.iloc[test_start : test_end + window_size_steps + prediction_horizon_steps]
-
-        # Generate training samples
-        sample_train = create_samples_with_datetime_index(train_data, window_size_steps, exclude_columns, target_column, prediction_horizon_steps, shifting_steps, elia_column_to_return,alignment_times=None) # training set does not require alignment
-
-        # Generate testing samples
-        sample_test = create_samples_with_datetime_index(test_data, window_size_steps, exclude_columns, target_column, prediction_horizon_steps, shifting_steps, elia_column_to_return,alignment_times)
-
-        if elia_column_to_return:
-            X_train, Y_train, ELIA_train = sample_train
-            X_test, Y_test, ELIA_test = sample_test
-            # Append the current split to the list
-            splits.append({
-                'X_train': X_train,
-                'Y_train': Y_train,
-                'X_test': X_test,
-                'Y_test': Y_test,
-                'ELIA_train': ELIA_train,
-                'ELIA_test': ELIA_test
-            })
-        else:
-            X_train, Y_train = sample_train
-            X_test, Y_test = sample_test
-            # Append the current split to the list
-            splits.append({
-                'X_train': X_train,
-                'Y_train': Y_train,
-                'X_test': X_test,
-                'Y_test': Y_test
-            })
-
+    # Use multiprocessing Pool to process splits in parallel
+    with Pool(n_jobs) as pool:
+        splits = pool.map(process_split, args_list)
 
     return splits
+
+
+# def create_time_series_splits(data, 
+#                               train_size_days, 
+#                               test_size_days, 
+#                               num_splits, 
+#                               window_size_steps, 
+#                               exclude_columns, 
+#                               target_column, 
+#                               prediction_horizon_steps, 
+#                               shifting_steps=None,
+#                               elia_column_to_return=None,
+#                               alignment_times=None):
+#     """
+#     Creates train/test splits for a multivariate time series dataset with maintained column names
+#     and datetime indices corresponding to the prediction time.
+    
+#     Parameters:
+#     - data (pd.DataFrame): The input time series data with 15-minute granularity.
+#                            Assumes that data has a DateTimeIndex.
+#     - train_size_days (int): Number of days for the training set in each split.
+#     - test_size_days (int): Number of days for the testing set in each split.
+#     - num_splits (int): Number of non-overlapping train/test splits to generate.
+#     - window_size_steps (int): Number of 15-minute steps to consider for lagged values (window size).
+#     - exclude_columns (list): List of columns to exclude from the training features.
+#     - target_column (str): The name of the target column.
+#     - prediction_horizon_steps (int): Number of 15-minute steps ahead to predict (prediction horizon).
+#     - shifting_steps (int or None): Number of 15-minute steps to skip between samples.
+#                                     If None, defaults to 1 (no skipping).
+#     - elia_column_to_return (str or None): An additional column to return with the same format as Y (target column).
+#                                         Useful to compare the results of the model with the ELIA forecasting. 
+#                                         It can be for example 'Most recent forecast' or  'Day-ahead 6PM forecast'
+#     - alignment_times (list or None): A list of times to align the samples to. Should run with shifting_steps = 1, it will select a subset of timestep that aligns with the specified times. (To start testing set at 6pm for example)
+
+#     Returns:
+#     - splits (list): A list containing dictionaries with keys 'X_train', 'Y_train', 'X_test', 'Y_test' for each split.
+#                      Each DataFrame has its index set to the datetime right before prediction. 
+#                      If elia_column_to_return is not None, the dictionary will also contain 'ELIA_train' and 'ELIA_test'.
+#     """
+
+#     steps_per_day = 96  # Number of 15-minute intervals in a day
+#     train_size_steps = train_size_days * steps_per_day
+#     test_size_steps = test_size_days * steps_per_day
+
+#     if shifting_steps is None:
+#         shifting_steps = 1
+
+#     split_size_steps = train_size_steps + test_size_steps
+
+#     # Calculate the total number of data points required
+#     total_data_steps_needed = split_size_steps * num_splits + window_size_steps + prediction_horizon_steps - 1
+
+#     if len(data) < total_data_steps_needed:
+#         raise ValueError('Not enough data for the specified number of splits and sizes.')
+
+#     splits = []
+
+#     for split_index in range(num_splits):
+#         # Calculate indices for train and test data
+#         split_start = split_index * split_size_steps
+#         train_start = split_start
+#         train_end = train_start + train_size_steps - 1
+
+#         test_start = train_end + 1
+#         test_end = test_start + test_size_steps - 1
+
+#         # Extract train and test data for the current split
+#         train_data = data.iloc[train_start : train_end + window_size_steps + prediction_horizon_steps]
+#         test_data = data.iloc[test_start : test_end + window_size_steps + prediction_horizon_steps]
+
+#         # Generate training samples
+#         sample_train = create_samples_with_datetime_index(train_data, window_size_steps, exclude_columns, target_column, prediction_horizon_steps, shifting_steps, elia_column_to_return,alignment_times=None) # training set does not require alignment
+
+#         # Generate testing samples
+#         sample_test = create_samples_with_datetime_index(test_data, window_size_steps, exclude_columns, target_column, prediction_horizon_steps, shifting_steps, elia_column_to_return,alignment_times)
+
+#         if elia_column_to_return:
+#             X_train, Y_train, ELIA_train = sample_train
+#             X_test, Y_test, ELIA_test = sample_test
+#             # Append the current split to the list
+#             splits.append({
+#                 'X_train': X_train,
+#                 'Y_train': Y_train,
+#                 'X_test': X_test,
+#                 'Y_test': Y_test,
+#                 'ELIA_train': ELIA_train,
+#                 'ELIA_test': ELIA_test
+#             })
+#         else:
+#             X_train, Y_train = sample_train
+#             X_test, Y_test = sample_test
+#             # Append the current split to the list
+#             splits.append({
+#                 'X_train': X_train,
+#                 'Y_train': Y_train,
+#                 'X_test': X_test,
+#                 'Y_test': Y_test
+#             })
+
+
+#     return splits
 
 def create_samples_with_datetime_index(data, window_size_steps, exclude_columns, target_column, prediction_horizon_steps, shifting_steps, elia_column_to_return,alignment_times):
     """
@@ -177,10 +285,10 @@ def create_samples_with_datetime_index(data, window_size_steps, exclude_columns,
         X_t = {}
         
         # Iterate over the time window
-        for w in range(window_size_steps):
-            time_step = t - window_size_steps + w + 1
-            suffix = f"_t-{window_size_steps - w - 1}"
-            for col in feature_columns:
+        for col in feature_columns:
+            for w in range(window_size_steps):
+                time_step = t - window_size_steps + w + 1
+                suffix = f"_t-{window_size_steps - w - 1}"
                 col_name = f"{col}{suffix}"
                 X_t[col_name] = data.iloc[time_step][col]
         
