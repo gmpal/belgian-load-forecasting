@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime
+from tqdm.auto import tqdm
 
 def mape(y_true, y_pred):
     return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
@@ -274,7 +275,7 @@ def create_samples_with_datetime_index(data, window_size_steps, exclude_columns,
         
     index_list = []
 
-    for t in t_values:
+    for t in tqdm(t_values):
         # Initialize an empty dictionary to store the features for this sample
         timestamp_t = data.index[t]
         # If alignment_times is specified, check if the time of timestamp_t matches
