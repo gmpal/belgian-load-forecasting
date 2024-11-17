@@ -1,6 +1,6 @@
 # Belgian Load Forecasting
 
-## Plan of action
+## Questions
 - [ ] Models:
     - [ ] Linear Model
     - [ ] Ridge Regression
@@ -26,5 +26,17 @@
     - [ ] Is the length of the output window defining the quality of the results, or is it the time horizon (is predicting the 0h->30h equivalent to predict 29h->30h)
     - [ ] Do the first forecasted steps compete with VST ?
 - [ ] Other
+    - [ ] How does in
     - [ ] At which forecasting horizon the VST best methods are not better than ELIA ?
     - [ ] Are the methods for VST and ST combinable for intermediary horizon ?
+
+## Strategy
+- [ ] Define the testing pipeline:
+    - [x] Function that extracts the input/output window
+    - [ ] Function that defines the training/testing dataset
+    - [ ] K-fold Cross-Validation
+    - [x] 7 models callable in standardized fashion
+    - [x] Define the error function
+    - [ ] Compute the error for ELIA on the same training/testing set
+    - [ ] Check for conformal prediction
+- [ ] Answer each of the previous question using one different script
