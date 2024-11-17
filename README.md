@@ -26,7 +26,6 @@
     - [ ] Is the length of the output window defining the quality of the results, or is it the time horizon (is predicting the 0h->30h equivalent to predict 29h->30h)
     - [ ] Do the first forecasted steps compete with VST ?
 - [ ] Other
-    - [ ] How does in
     - [ ] At which forecasting horizon the VST best methods are not better than ELIA ?
     - [ ] Are the methods for VST and ST combinable for intermediary horizon ?
 
