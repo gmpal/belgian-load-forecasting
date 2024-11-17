@@ -31,6 +31,7 @@
 
 ## Strategy
 - [ ] Define the testing pipeline:
+    - [ ] Define 
     - [x] Function that extracts the input/output window
     - [ ] Function that defines the training/testing dataset
     - [ ] K-fold Cross-Validation
