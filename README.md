@@ -31,12 +31,11 @@
 
 ## Strategy
 - [ ] Define the testing pipeline:
-    - [ ] Define 
+    - [x] Define the preprocessing function
     - [x] Function that extracts the input/output window
-    - [ ] Function that defines the training/testing dataset
     - [ ] K-fold Cross-Validation
     - [x] 7 models callable in standardized fashion
     - [x] Define the error function
-    - [ ] Compute the error for ELIA on the same training/testing set
+    - [ ] Compute the error for ELIA
     - [ ] Check for conformal prediction
 - [ ] Answer each of the previous question using one different script
