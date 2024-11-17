@@ -1,13 +1,12 @@
 # Belgian Load Forecasting
 
 ## Questions
-- [ ] Models:
-    - [ ] Linear Model
-    - [ ] Ridge Regression
-    - [ ] SVM
-    - [ ] CNN
-    - [ ] LightGBM
-    - [ ] Linear/Non-Linear NN
+- [x] Models:
+    - [x] Linear Model
+    - [x] Decision Tree
+    - [x] CNN
+    - [x] LightGBM
+    - [x] Linear/Non-Linear NN
 - [ ] For every question/model
     - [ ] Conformal prediction
 
@@ -33,9 +32,9 @@
 - [ ] Define the testing pipeline:
     - [x] Define the preprocessing function
     - [x] Function that extracts the input/output window
-    - [ ] K-fold Cross-Validation
+    - [x] K-fold Cross-Validation
     - [x] 7 models callable in standardized fashion
     - [x] Define the error function
-    - [ ] Compute the error for ELIA
+    - [x] Compute the error for ELIA
     - [ ] Check for conformal prediction
 - [ ] Answer each of the previous question using one different script

@@ -22,6 +22,13 @@ def preprocess(filepath, lockdown=[(182692, 187181), (204772, 219268)]):
     data['Total Load Interpolated'] = data['Total Load'].interpolate(method='linear')
     return data
 
+def read_df(filepath):
+    df = pd.read_csv(filepath, sep=',', parse_dates=['Datetime'], index_col=0)
+    df.index = pd.to_datetime(df['Datetime'], utc=True)
+    df.drop(columns=['Datetime'], inplace=True)
+    df.dropna(inplace=True)
+    return df
+
 from multiprocessing import Pool
 
 def process_split(args):
